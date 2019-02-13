@@ -20,6 +20,7 @@ pub type TestResult = Result<(), Box<Error>>;
 ///
 /// Returns the produced output as a `String` that can be used for a
 /// snapshot test.
+// TODO: remove this and replace with `compile_test` below
 pub fn test_tu<F>(f: F) -> String
 where
     F: FnOnce(&mut TranslationUnitBuilder<'_, StringWriter>) -> TestResult,

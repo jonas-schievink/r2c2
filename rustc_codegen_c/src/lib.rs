@@ -215,7 +215,7 @@ impl CodegenBackend for CCodegenBackend {
         rustc_incremental::finalize_session_directory(sess, ongoing_codegen.link.crate_hash);
 
         Ok(())*/
-        unimplemented!()
+        unimplemented!("join_codegen_and_link")
     }
 }
 
@@ -247,7 +247,7 @@ impl WriteBackendMethods for CCodegenBackend {
     }
 
     fn print_pass_timings(&self) {
-        // TODO
+        unimplemented!("print_pass_timings");
     }
 
     unsafe fn optimize(
