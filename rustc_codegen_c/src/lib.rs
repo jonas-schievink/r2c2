@@ -1,8 +1,7 @@
 //! A rustc code generation backend that outputs C code.
 
 // Much of the code in this crate is copied from the reference LLVM backend
-#![allow(warnings)]  // FIXME remove once this does something
-
+#![allow(warnings)] // FIXME remove once this does something
 #![feature(rustc_private)]
 
 #[macro_use]
@@ -15,8 +14,8 @@ extern crate rustc_target;
 extern crate rustc_data_structures;
 extern crate rustc_codegen_ssa;
 extern crate rustc_codegen_utils;
-extern crate rustc_incremental;
 extern crate rustc_errors;
+extern crate rustc_incremental;
 #[macro_use]
 extern crate syntax;
 extern crate serialize;
@@ -26,9 +25,9 @@ extern crate syntax_pos;
 extern crate log;
 extern crate ar;
 extern crate cc;
+extern crate hashbrown;
 extern crate object;
 extern crate tempfile;
-extern crate hashbrown;
 extern crate toolshed;
 #[cfg(test)]
 #[macro_use]
@@ -43,19 +42,18 @@ mod utils;
 use rustc::dep_graph::{DepGraph, WorkProduct};
 use rustc::hir::def_id::CrateNum;
 use rustc::middle::allocator::AllocatorKind;
-use rustc::middle::cstore::EncodedMetadata;
-use rustc::middle::cstore::MetadataLoader;
-use rustc::middle::cstore::{CrateSource, LibSource, NativeLibrary};
+use rustc::middle::cstore::{
+    CrateSource, EncodedMetadata, LibSource, MetadataLoader, NativeLibrary,
+};
 use rustc::middle::lang_items::LangItem;
 use rustc::mir::mono::Stats;
-use rustc::session::config::OptLevel;
-use rustc::session::config::{OutputFilenames, OutputType, PrintRequest};
-use rustc::session::{CompileIncomplete, Session};
+use rustc::session::config::{OptLevel, OutputFilenames, OutputType, PrintRequest};
+use rustc::session::Session;
 use rustc::ty::{self, TyCtxt};
+use rustc::util::common::ErrorReported;
 use rustc::util::nodemap::{FxHashMap, FxHashSet};
-use rustc::util::time_graph::{self, Timeline};
 use rustc_codegen_ssa::back::lto::{LtoModuleCodegen, SerializedModule, ThinModule};
-use rustc_codegen_ssa::back::write::{CodegenContext, ModuleConfig};
+use rustc_codegen_ssa::back::write::{CodegenContext, FatLTOInput, ModuleConfig};
 use rustc_codegen_ssa::traits::{
     ExtraBackendMethods, ModuleBufferMethods, ThinBufferMethods, WriteBackendMethods,
 };
@@ -169,11 +167,19 @@ impl CodegenBackend for CCodegenBackend {
     fn codegen_crate<'a, 'tcx>(
         &self,
         tcx: TyCtxt<'a, 'tcx, 'tcx>,
+        metadata: EncodedMetadata,
+        need_metadata_module: bool,
         rx: mpsc::Receiver<Box<dyn Any + Send>>,
     ) -> Box<dyn Any> {
         // Let `rustc_codegen_ssa` do this. For this to work we have to
         // implement loads of traits from there (see below).
-        Box::new(rustc_codegen_ssa::base::codegen_crate(Self {}, tcx, rx))
+        Box::new(rustc_codegen_ssa::base::codegen_crate(
+            Self {},
+            tcx,
+            metadata,
+            need_metadata_module,
+            rx,
+        ))
     }
 
     fn join_codegen_and_link(
@@ -182,7 +188,7 @@ impl CodegenBackend for CCodegenBackend {
         sess: &Session,
         dep_graph: &DepGraph,
         outputs: &OutputFilenames,
-    ) -> Result<(), CompileIncomplete> {
+    ) -> Result<(), ErrorReported> {
         /*use rustc::util::common::time;
         let (ongoing_codegen, work_products) =
             ongoing_codegen.downcast::<::back::write::OngoingCodegen>()
@@ -231,8 +237,8 @@ impl WriteBackendMethods for CCodegenBackend {
 
     fn run_fat_lto(
         cgcx: &CodegenContext<Self>,
-        modules: Vec<ModuleCodegen<Self::Module>>,
-        timeline: &mut Timeline,
+        modules: Vec<FatLTOInput<Self>>,
+        cached_modules: Vec<(SerializedModule<Self::ModuleBuffer>, WorkProduct)>,
     ) -> Result<LtoModuleCodegen<Self>, FatalError> {
         unimplemented!("C backend fat LTO")
     }
@@ -241,7 +247,6 @@ impl WriteBackendMethods for CCodegenBackend {
         cgcx: &CodegenContext<Self>,
         modules: Vec<(String, Self::ThinBuffer)>,
         cached_modules: Vec<(SerializedModule<Self::ModuleBuffer>, WorkProduct)>,
-        timeline: &mut Timeline,
     ) -> Result<(Vec<LtoModuleCodegen<Self>>, Vec<WorkProduct>), FatalError> {
         unimplemented!("C backend thin LTO")
     }
@@ -255,7 +260,6 @@ impl WriteBackendMethods for CCodegenBackend {
         diag_handler: &Handler,
         module: &ModuleCodegen<Self::Module>,
         config: &ModuleConfig,
-        timeline: &mut Timeline,
     ) -> Result<(), FatalError> {
         unimplemented!()
     }
@@ -263,15 +267,20 @@ impl WriteBackendMethods for CCodegenBackend {
     unsafe fn optimize_thin(
         cgcx: &CodegenContext<Self>,
         thin: &mut ThinModule<Self>,
-        timeline: &mut Timeline,
     ) -> Result<ModuleCodegen<Self::Module>, FatalError> {
         unimplemented!()
     }
 
-    fn prepare_thin(
+    unsafe fn codegen(
         cgcx: &CodegenContext<Self>,
+        diag_handler: &Handler,
         module: ModuleCodegen<Self::Module>,
-    ) -> (String, Self::ThinBuffer) {
+        config: &ModuleConfig,
+    ) -> Result<CompiledModule, FatalError> {
+        unimplemented!()
+    }
+
+    fn prepare_thin(module: ModuleCodegen<Self::Module>) -> (String, Self::ThinBuffer) {
         unimplemented!("C backend ThinLTO")
     }
 
@@ -284,14 +293,8 @@ impl WriteBackendMethods for CCodegenBackend {
         unimplemented!("C backend LTO")
     }
 
-    unsafe fn codegen(
-        cgcx: &CodegenContext<Self>,
-        diag_handler: &Handler,
-        module: ModuleCodegen<Self::Module>,
-        config: &ModuleConfig,
-        timeline: &mut Timeline,
-    ) -> Result<CompiledModule, FatalError> {
-        unimplemented!()
+    fn serialize_module(module: ModuleCodegen<Self::Module>) -> (String, Self::ModuleBuffer) {
+        unimplemented!("C backend serialize_module")
     }
 }
 
@@ -302,15 +305,16 @@ impl ExtraBackendMethods for CCodegenBackend {
         codegen::Module
     }
 
-    fn write_metadata<'b, 'gcx>(
+    fn write_compressed_metadata<'b, 'gcx>(
         &self,
         tcx: TyCtxt<'b, 'gcx, 'gcx>,
-        metadata: &Self::Module,
-    ) -> EncodedMetadata {
-        metadata::encode(tcx)
+        metadata: &EncodedMetadata,
+        llvm_module: &mut Self::Module,
+    ) {
+        unimplemented!();
     }
 
-    fn codegen_allocator(&self, tcx: TyCtxt, mods: &Self::Module, kind: AllocatorKind) {
+    fn codegen_allocator(&self, tcx: TyCtxt, mods: &mut Self::Module, kind: AllocatorKind) {
         unimplemented!("codegen_allocator")
     }
 
@@ -328,9 +332,7 @@ impl ExtraBackendMethods for CCodegenBackend {
         opt_level: OptLevel,
         find_features: bool,
     ) -> Arc<Fn() -> Result<Self::TargetMachine, String> + Send + Sync> {
-        Arc::new(|| {
-            Err("unimplemented".to_string())
-        })
+        Arc::new(|| Err("unimplemented".to_string()))
     }
 
     fn target_cpu<'b>(&self, sess: &'b Session) -> &'b str {

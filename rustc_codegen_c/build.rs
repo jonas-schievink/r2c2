@@ -1,6 +1,6 @@
+use std::env;
 use std::fs::File;
 use std::io::Write;
-use std::env;
 
 fn main() {
     let out = format!("{}/triples.rs", env::var("OUT_DIR").unwrap());

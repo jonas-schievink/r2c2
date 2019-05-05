@@ -3,7 +3,7 @@
 #![cfg(test)]
 
 use super::function::FunctionBuilder;
-use super::{TranslationUnitBuilder, Symbol, FnSig, TypeRef};
+use super::{FnSig, Symbol, TranslationUnitBuilder, TypeRef};
 use utils::{StringWriter, WriteStr};
 
 use cc::Build;
@@ -47,7 +47,8 @@ where
 }
 
 pub fn compile_test<F>(name: &str, f: F)
-where F: FnOnce(&mut TranslationUnitBuilder<'_, StringWriter>) -> TestResult
+where
+    F: FnOnce(&mut TranslationUnitBuilder<'_, StringWriter>) -> TestResult,
 {
     let arena = Arena::new();
     let mut writer = StringWriter(String::new());

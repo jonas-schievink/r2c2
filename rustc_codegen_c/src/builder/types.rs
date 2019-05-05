@@ -4,8 +4,8 @@
 
 use utils::{StringWriter, WriteStr};
 
-use std::io::{self, Write};
 use std::fmt;
+use std::io::{self, Write};
 
 /// A function signature.
 #[derive(Copy, Clone)]
@@ -28,7 +28,7 @@ impl FnSig<'_> {
                 buf.push_str(", ");
             }
 
-            arg.declare_variable(format!("_{}", i+1), &mut buf)?;
+            arg.declare_variable(format!("_{}", i + 1), &mut buf)?;
         }
         if self.args.is_empty() {
             // `void` ensures the compiler doesn't let us call the function with arguments
@@ -96,14 +96,17 @@ impl Type<'_> {
             Type::IntPtr => "intptr_t",
             Type::UintPtr => "uintptr_t",
             Type::Pointer(pointee) => return pointee.declare_variable(&format!("* {}", name), w),
-            Type::Array { ty, len } => return ty.declare_variable(&format!("{}[{}]", name, len), w),
+            Type::Array { ty, len } => {
+                return ty.declare_variable(&format!("{}[{}]", name, len), w)
+            }
             Type::FunctionPointer(sig) => {
                 // fn pointer syntax is like fn declaration syntax except the variable name is put
                 // in `(*NAME)` where the fn name is
                 return sig.declare(format!("(*{})", name), w);
             }
-            Type::FwdStruct { name: ty } |
-            Type::Struct { name: ty } => return write!(w, "struct {} {}", ty, name),
+            Type::FwdStruct { name: ty } | Type::Struct { name: ty } => {
+                return write!(w, "struct {} {}", ty, name)
+            }
             Type::FwdUnion { name: ty } => return write!(w, "union {} {}", ty, name),
             // the void case is needed to declare functions and fn pointers
             Type::Void => return write!(w, "void {}", name),
@@ -132,7 +135,9 @@ pub trait AsType<'a> {
 pub struct TypeRef<'a>(pub &'a Type<'a>);
 
 impl<'a> AsType<'a> for TypeRef<'a> {
-    fn as_type(&self) -> &'a Type<'a> { self.0 }
+    fn as_type(&self) -> &'a Type<'a> {
+        self.0
+    }
 }
 
 impl TypeRef<'_> {
@@ -143,7 +148,11 @@ impl TypeRef<'_> {
     ///
     /// This can be used to declare local and global variables as well as struct
     /// fields.
-    pub fn declare_variable<W: WriteStr>(&self, name: impl AsRef<str>, w: &mut W) -> io::Result<()> {
+    pub fn declare_variable<W: WriteStr>(
+        &self,
+        name: impl AsRef<str>,
+        w: &mut W,
+    ) -> io::Result<()> {
         self.0.declare_variable(name.as_ref(), w)
     }
 }
@@ -153,5 +162,7 @@ impl TypeRef<'_> {
 pub struct IncompleteTypeRef<'a>(pub &'a Type<'a>);
 
 impl<'a> AsType<'a> for IncompleteTypeRef<'a> {
-    fn as_type(&self) -> &'a Type<'a> { self.0 }
+    fn as_type(&self) -> &'a Type<'a> {
+        self.0
+    }
 }

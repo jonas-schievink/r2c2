@@ -1,5 +1,7 @@
 //! The actual C code generation.
 
+pub mod allocator;
+
 use rustc::session::Session;
 use rustc::ty::TyCtxt;
 use rustc_codegen_utils::check_for_rustc_errors_attr;
@@ -41,7 +43,7 @@ fn report_unsupported_flags(sess: &Session) {
         sess.fatal("the C codegen backend doesn't support ThinLTO");
     }
 
-    if sess.opts.debugging_opts.pgo_gen.is_some() || !sess.opts.debugging_opts.pgo_use.is_empty() {
+    if sess.opts.debugging_opts.pgo_gen.enabled() || !sess.opts.debugging_opts.pgo_use.is_empty() {
         sess.fatal("the C codegen backend doesn't support profile-guided optimization");
     }
 
@@ -65,8 +67,8 @@ fn report_unsupported_flags(sess: &Session) {
         sess.fatal("-Zembed-bitcode not supported by C codegen backend");
     }
 
-    if sess.opts.debugging_opts.cross_lang_lto.enabled() {
-        sess.fatal("cross-language LTO not supported by C codegen backend");
+    if sess.opts.cg.linker_plugin_lto.enabled() {
+        sess.fatal("linker plugin based LTO not supported by C codegen backend");
     }
 
     // TODO: incomplete

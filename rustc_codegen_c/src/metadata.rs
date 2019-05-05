@@ -5,6 +5,7 @@ use utils::ResultExt;
 use ar::Archive;
 
 use rustc::hir::def_id::LOCAL_CRATE;
+use rustc::middle::cstore::EncodedMetadata;
 use rustc::middle::cstore::MetadataLoader;
 use rustc::session::config::CrateType;
 use rustc::ty::TyCtxt;
@@ -14,7 +15,6 @@ use rustc_target::spec::Target;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use rustc::middle::cstore::EncodedMetadata;
 
 /// Metadata filename for metadata stored in an rlib.
 const METADATA_FILENAME: &str = "rust.metadata.bin";
@@ -82,8 +82,6 @@ impl MetadataLoader for Loader {
 ///
 /// Returns `None` if the `crate_type` doesn't carry metadata (eg.
 /// executables, C-compatible libs).
-pub fn encode<'a, 'tcx>(
-    tcx: TyCtxt<'a, 'tcx, 'tcx>,
-) -> EncodedMetadata {
+pub fn encode<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) -> EncodedMetadata {
     tcx.encode_metadata()
 }

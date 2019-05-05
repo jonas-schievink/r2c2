@@ -1,9 +1,9 @@
-use std::io::{self, Write};
+use rustc::ty::TyCtxt;
 use std::fmt::{self, Display};
-use std::str;
+use std::io::{self, Write};
 use std::ops::Deref;
 use std::ops::DerefMut;
-use rustc::ty::TyCtxt;
+use std::str;
 
 // Import the host/target triple, set by the build script
 include!(concat!(env!("OUT_DIR"), "/triples.rs"));
@@ -42,7 +42,6 @@ pub fn cc_version() -> Result<String, String> {
         Err(out)
     }
 }
-
 
 /// Trait for writing UTF-8 data to a sink.
 pub trait WriteStr {

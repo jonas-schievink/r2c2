@@ -46,7 +46,7 @@ impl<'a, W: WriteStr> FunctionBuilder<'a, W> {
         name: Symbol<'_>,
         proto: FnSig<'a>,
     ) -> io::Result<Self> {
-        proto.declare(name.mangled, writer)?;
+        proto.declare(name.mangled(), writer)?;
         writeln!(writer)?;
         writeln!(writer, "{{")?;
         Ok(Self {
