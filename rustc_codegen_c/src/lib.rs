@@ -89,7 +89,9 @@ impl CCodegenBackend {
 
 impl CodegenBackend for CCodegenBackend {
     fn init(&self, sess: &Session) {
+        env_logger::init();
         info!("r2c2 C codegen backend initializing!");
+
         ice::register_hook();
     }
 
