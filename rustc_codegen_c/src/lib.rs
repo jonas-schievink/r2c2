@@ -64,8 +64,8 @@ use std::any::Any;
 use std::panic;
 use std::sync::mpsc;
 use std::sync::Arc;
-use syntax::symbol::Symbol;
 use syntax::expand::allocator::AllocatorKind;
+use syntax::symbol::Symbol;
 
 /// This is the entrypoint for a hot plugged rustc codegen backend.
 #[no_mangle]

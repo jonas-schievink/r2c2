@@ -9,10 +9,10 @@ use utils::{StringWriter, WriteStr};
 use cc::Build;
 use std::error::Error;
 use std::io::Write;
+use syntax_pos::edition::DEFAULT_EDITION;
+use syntax_pos::{Globals, GLOBALS};
 use tempfile::{self, TempDir};
 use toolshed::Arena;
-use syntax_pos::{Globals, GLOBALS};
-use syntax_pos::edition::DEFAULT_EDITION;
 
 /// Result to return from unit tests (instead of panicking).
 pub type TestResult = Result<(), Box<Error>>;

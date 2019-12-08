@@ -19,6 +19,7 @@ use hashbrown::hash_map::{HashMap, RawEntryMut};
 use hashbrown::HashSet;
 use toolshed::Arena;
 
+use bitflags::_core::fmt::{Error, Formatter};
 use rustc::ty::{Instance, SymbolName, TyCtxt};
 use rustc_index::{newtype_index, vec::IndexVec};
 use std::borrow::Cow;
@@ -26,7 +27,6 @@ use std::fmt;
 use std::io::{self, Write};
 use std::rc::Rc;
 use syntax::symbol::{Symbol, SymbolStr};
-use bitflags::_core::fmt::{Formatter, Error};
 
 /// A Rust/C function or type name.
 pub struct Name<'a> {
