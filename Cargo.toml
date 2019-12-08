@@ -6,6 +6,7 @@ description = "Nightly rustc wrapper using the C codegen backend"
 
 [dependencies]
 log = "0.4.6"
+env_logger = "0.7.1"
 
 # depend on the codegen backend to ensure Cargo built the dylib
 rustc_codegen_c = { path = "rustc_codegen_c" }

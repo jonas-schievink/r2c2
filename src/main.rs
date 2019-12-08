@@ -2,6 +2,7 @@
 
 #[macro_use]
 extern crate log;
+extern crate env_logger;
 
 use std::env;
 use std::ffi::OsString;
@@ -22,6 +23,8 @@ fn locate_codegen_library() -> PathBuf {
 }
 
 fn main() {
+    env_logger::init();
+
     let backend_path = locate_codegen_library();
     if !backend_path.exists() {
         eprintln!(
