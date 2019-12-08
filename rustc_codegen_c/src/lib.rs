@@ -6,7 +6,6 @@
 
 #[macro_use]
 extern crate rustc;
-extern crate rustc_allocator;
 extern crate rustc_apfloat;
 extern crate rustc_mir;
 extern crate rustc_target;
@@ -16,6 +15,7 @@ extern crate rustc_codegen_ssa;
 extern crate rustc_codegen_utils;
 extern crate rustc_errors;
 extern crate rustc_incremental;
+extern crate rustc_index;
 #[macro_use]
 extern crate syntax;
 extern crate serialize;
@@ -32,6 +32,7 @@ extern crate toolshed;
 #[cfg(test)]
 #[macro_use]
 extern crate insta;
+extern crate bitflags;
 
 mod builder;
 mod codegen;
@@ -41,12 +42,10 @@ mod utils;
 
 use rustc::dep_graph::{DepGraph, WorkProduct};
 use rustc::hir::def_id::CrateNum;
-use rustc::middle::allocator::AllocatorKind;
 use rustc::middle::cstore::{
     CrateSource, EncodedMetadata, LibSource, MetadataLoader, NativeLibrary,
 };
 use rustc::middle::lang_items::LangItem;
-use rustc::mir::mono::Stats;
 use rustc::session::config::{OptLevel, OutputFilenames, OutputType, PrintRequest};
 use rustc::session::Session;
 use rustc::ty::{self, TyCtxt};
@@ -65,8 +64,8 @@ use std::any::Any;
 use std::panic;
 use std::sync::mpsc;
 use std::sync::Arc;
-use syntax::symbol::InternedString;
-use syntax_pos::symbol::Symbol;
+use syntax::symbol::Symbol;
+use syntax::expand::allocator::AllocatorKind;
 
 /// This is the entrypoint for a hot plugged rustc codegen backend.
 #[no_mangle]
@@ -136,10 +135,6 @@ impl CodegenBackend for CCodegenBackend {
         }
     }
 
-    fn diagnostics(&self) -> &[(&'static str, &'static str)] {
-        &[] //DIAGNOSTICS
-    }
-
     fn target_features(&self, sess: &Session) -> Vec<Symbol> {
         // TODO
         vec![]
@@ -164,12 +159,11 @@ impl CodegenBackend for CCodegenBackend {
         providers::provide_extern(providers);
     }
 
-    fn codegen_crate<'a, 'tcx>(
+    fn codegen_crate<'tcx>(
         &self,
-        tcx: TyCtxt<'a, 'tcx, 'tcx>,
+        tcx: TyCtxt<'tcx>,
         metadata: EncodedMetadata,
         need_metadata_module: bool,
-        rx: mpsc::Receiver<Box<dyn Any + Send>>,
     ) -> Box<dyn Any> {
         // Let `rustc_codegen_ssa` do this. For this to work we have to
         // implement loads of traits from there (see below).
@@ -178,7 +172,6 @@ impl CodegenBackend for CCodegenBackend {
             tcx,
             metadata,
             need_metadata_module,
-            rx,
         ))
     }
 
@@ -305,9 +298,9 @@ impl ExtraBackendMethods for CCodegenBackend {
         codegen::Module
     }
 
-    fn write_compressed_metadata<'b, 'gcx>(
+    fn write_compressed_metadata<'tcx>(
         &self,
-        tcx: TyCtxt<'b, 'gcx, 'gcx>,
+        tcx: TyCtxt<'tcx>,
         metadata: &EncodedMetadata,
         llvm_module: &mut Self::Module,
     ) {
@@ -318,11 +311,12 @@ impl ExtraBackendMethods for CCodegenBackend {
         unimplemented!("codegen_allocator")
     }
 
-    fn compile_codegen_unit<'a, 'tcx: 'a>(
+    fn compile_codegen_unit<'tcx>(
         &self,
-        tcx: TyCtxt<'a, 'tcx, 'tcx>,
-        cgu_name: InternedString,
-    ) -> Stats {
+        tcx: TyCtxt<'tcx>,
+        cgu_name: Symbol,
+        tx_to_llvm_workers: &mpsc::Sender<Box<dyn Any + Send>>,
+    ) {
         unimplemented!()
     }
 

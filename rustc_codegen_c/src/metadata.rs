@@ -82,6 +82,6 @@ impl MetadataLoader for Loader {
 ///
 /// Returns `None` if the `crate_type` doesn't carry metadata (eg.
 /// executables, C-compatible libs).
-pub fn encode<'a, 'tcx>(tcx: TyCtxt<'a, 'tcx, 'tcx>) -> EncodedMetadata {
+pub fn encode<'tcx>(tcx: TyCtxt<'tcx>) -> EncodedMetadata {
     tcx.encode_metadata()
 }

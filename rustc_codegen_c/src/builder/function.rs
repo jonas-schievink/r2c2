@@ -1,7 +1,7 @@
 //! Function builder.
 
 use super::types::{FnSig, TypeRef};
-use super::Symbol;
+use super::Name;
 use utils::WriteStr;
 
 use hashbrown::HashSet;
@@ -43,10 +43,10 @@ impl<'a, W: WriteStr> FunctionBuilder<'a, W> {
     pub fn create(
         writer: &'a mut W,
         arena: &'a Arena,
-        name: Symbol<'_>,
+        name: Name<'_>,
         proto: FnSig<'a>,
     ) -> io::Result<Self> {
-        proto.declare(name.mangled(), writer)?;
+        proto.declare(&*name.mangled(), writer)?;
         writeln!(writer)?;
         writeln!(writer, "{{")?;
         Ok(Self {
@@ -123,7 +123,7 @@ mod tests {
             let sig = tu.fn_sig(None, &[]);
             let double = tu.double();
             let fnptr = tu.fn_ptr(sig);
-            let mut f = tu.define_function(&a, Symbol::test("declare_locals"), sig)?;
+            let mut f = tu.define_function(&a, Name::test("declare_locals"), sig)?;
             f.declare_variable("dbl", double, None)?;
             f.declare_variable("f", fnptr, Some("i'm a function pointer with a comment"))?;
             f.finish()?;

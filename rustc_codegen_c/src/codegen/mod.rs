@@ -19,8 +19,8 @@ pub struct OngoingCodegen {}
 ///
 /// This can generate any number of artifacts (rlibs, dylibs, binaries) and
 /// object files (each representing a codegen unit).
-pub fn start_codegen_crate<'a, 'tcx>(
-    tcx: TyCtxt<'a, 'tcx, 'tcx>,
+pub fn start_codegen_crate<'tcx>(
+    tcx: TyCtxt<'tcx>,
     rx: mpsc::Receiver<Box<dyn Any + Send>>,
 ) -> OngoingCodegen {
     // abort if `#[rustc_error]` is used by tests - this could be done by rustc
@@ -43,12 +43,8 @@ fn report_unsupported_flags(sess: &Session) {
         sess.fatal("the C codegen backend doesn't support ThinLTO");
     }
 
-    if sess.opts.debugging_opts.pgo_gen.enabled() || !sess.opts.debugging_opts.pgo_use.is_empty() {
+    if sess.opts.cg.profile_generate.enabled() || sess.opts.cg.profile_use.is_some() {
         sess.fatal("the C codegen backend doesn't support profile-guided optimization");
-    }
-
-    if sess.count_llvm_insns() {
-        sess.fatal("-Zcount-llvm-insns not supported by C codegen backend");
     }
 
     if sess.time_llvm_passes() {

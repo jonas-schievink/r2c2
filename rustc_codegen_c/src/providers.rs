@@ -18,10 +18,10 @@ pub fn provide(providers: &mut ty::query::Providers) {
             // whitelist them all
             // FIXME: This seems incompatible with other codegen backends: They don't know which
             // features LLVM supports
-            Lrc::new(Default::default())
+            tcx.arena.alloc(Default::default())
         } else {
             // TODO: figure this out - we should support the same features as the llvm backend
-            Lrc::new(Default::default())
+            tcx.arena.alloc(Default::default())
         }
     };
 

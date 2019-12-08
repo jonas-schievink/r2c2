@@ -20,29 +20,26 @@ use hashbrown::HashSet;
 use toolshed::Arena;
 
 use rustc::ty::{Instance, SymbolName, TyCtxt};
-use rustc_data_structures::{indexed_vec::IndexVec, newtype_index};
+use rustc_index::{newtype_index, vec::IndexVec};
 use std::borrow::Cow;
+use std::fmt;
 use std::io::{self, Write};
 use std::rc::Rc;
-use syntax_pos::symbol::LocalInternedString;
-
-enum MangledName<'a> {
-    Interned(LocalInternedString),
-    Raw(&'a str),
-}
+use syntax::symbol::{Symbol, SymbolStr};
+use bitflags::_core::fmt::{Formatter, Error};
 
 /// A Rust/C function or type name.
-pub struct Symbol<'a> {
+pub struct Name<'a> {
     rust: Cow<'a, str>,
-    mangled: MangledName<'a>,
+    mangled: Symbol,
 }
 
-impl<'a> Symbol<'a> {
+impl<'a> Name<'a> {
     /// Create a `Symbol` for a monomorphized `Instance`.
-    pub fn for_instance<'tcx>(inst: &Instance<'tcx>, tcx: TyCtxt<'_, 'tcx, 'tcx>) -> Self {
+    pub fn for_instance<'tcx>(inst: &Instance<'tcx>, tcx: TyCtxt<'tcx>) -> Self {
         Self {
             rust: inst.to_string().into(),
-            mangled: MangledName::Interned(tcx.symbol_name(*inst).as_str()),
+            mangled: tcx.symbol_name(*inst).name,
         }
     }
 
@@ -50,7 +47,7 @@ impl<'a> Symbol<'a> {
     pub fn test(c_name: &'a str) -> Self {
         Self {
             rust: "(test-symbol: no associated Rust name)".into(),
-            mangled: MangledName::Raw(c_name),
+            mangled: Symbol::intern(c_name),
         }
     }
 
@@ -60,11 +57,8 @@ impl<'a> Symbol<'a> {
     }
 
     /// Returns the mangled C name of this symbol.
-    pub fn mangled(&self) -> &str {
-        match &self.mangled {
-            MangledName::Interned(i) => i.get(),
-            MangledName::Raw(r) => r,
-        }
+    pub fn mangled(&self) -> SymbolStr {
+        self.mangled.as_str()
     }
 }
 
@@ -192,56 +186,56 @@ impl<'a, W: WriteStr> TranslationUnitBuilder<'a, W> {
     }
 
     /// Emits a forward-declaration of a struct `inst`.
-    pub fn fwd_declare_struct(&mut self, sym: Symbol<'_>) -> io::Result<IncompleteTypeRef<'a>> {
+    pub fn fwd_declare_struct(&mut self, sym: Name<'_>) -> io::Result<IncompleteTypeRef<'a>> {
         writeln!(
             self.writer,
             "struct {};  /* {} */",
             sym.mangled(),
             sym.rust()
         )?;
-        let name = self.arena.alloc_str(sym.mangled());
+        let name = self.arena.alloc_str(&sym.mangled());
         Ok(IncompleteTypeRef(
             self.arena.alloc(Type::FwdStruct { name }),
         ))
     }
 
     /// Emits a forward-declaration of a union `inst`.
-    pub fn fwd_declare_union(&mut self, sym: Symbol<'_>) -> io::Result<IncompleteTypeRef<'a>> {
+    pub fn fwd_declare_union(&mut self, sym: Name<'_>) -> io::Result<IncompleteTypeRef<'a>> {
         writeln!(
             self.writer,
             "union {};  /* {} */",
             sym.mangled(),
             sym.rust()
         )?;
-        let name = self.arena.alloc_str(sym.mangled());
+        let name = self.arena.alloc_str(&sym.mangled());
         Ok(IncompleteTypeRef(self.arena.alloc(Type::FwdUnion { name })))
     }
 
     pub fn fwd_declare_function(
         &mut self,
-        name: Symbol<'_>,
+        name: Name<'_>,
         proto: FnSig<'a>,
     ) -> io::Result<Function<'a>> {
-        proto.declare(name.mangled(), &mut self.writer)?;
+        proto.declare(&*name.mangled(), &mut self.writer)?;
         let fnty = self.fn_ptr(proto);
         writeln!(self.writer, "; /* {} */", name.rust())?;
         Ok(Function {
             sig: proto,
             ptr_ty: fnty,
-            name: self.arena.alloc_str(name.mangled()),
+            name: self.arena.alloc_str(&name.mangled()),
         })
     }
 
     fn define_named_type<'f, F>(
         &mut self,
         kind: &str,
-        sym: Symbol<'_>,
+        sym: Name<'_>,
         fields: F,
     ) -> io::Result<TypeRef<'a>>
     where
         F: IntoIterator<Item = (&'f str, TypeRef<'a>)>,
     {
-        if self.defd_types.contains(sym.mangled()) {
+        if self.defd_types.contains(&*sym.mangled()) {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!("type '{}' already defined", sym.mangled()),
@@ -262,14 +256,14 @@ impl<'a, W: WriteStr> TranslationUnitBuilder<'a, W> {
         }
         writeln!(self.writer, "}};")?;
 
-        let name = self.arena.alloc_str(sym.mangled());
+        let name = self.arena.alloc_str(&sym.mangled());
         self.defd_types.insert(name);
         Ok(TypeRef(self.arena.alloc(Type::Struct { name })))
     }
 
     /// Defines a `struct` with field names and types.
     // TODO attach attributes
-    pub fn define_struct<'f, F>(&mut self, sym: Symbol<'_>, fields: F) -> io::Result<TypeRef<'a>>
+    pub fn define_struct<'f, F>(&mut self, sym: Name<'_>, fields: F) -> io::Result<TypeRef<'a>>
     where
         F: IntoIterator<Item = (&'f str, TypeRef<'a>)>,
     {
@@ -277,7 +271,7 @@ impl<'a, W: WriteStr> TranslationUnitBuilder<'a, W> {
     }
 
     /// Defines a `union` with field names and types.
-    pub fn define_union<'f, F>(&mut self, sym: Symbol<'_>, fields: F) -> io::Result<TypeRef<'a>>
+    pub fn define_union<'f, F>(&mut self, sym: Name<'_>, fields: F) -> io::Result<TypeRef<'a>>
     where
         F: IntoIterator<Item = (&'f str, TypeRef<'a>)>,
     {
@@ -288,7 +282,7 @@ impl<'a, W: WriteStr> TranslationUnitBuilder<'a, W> {
     pub fn define_function<'b>(
         &'b mut self,
         arena: &'b Arena,
-        name: Symbol<'_>,
+        name: Name<'_>,
         proto: FnSig<'a>,
     ) -> io::Result<FunctionBuilder<'b, W>> {
         Ok(FunctionBuilder::create(
@@ -309,7 +303,7 @@ pub struct Function<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::test::test_tu;
+    use super::test::compile_test;
     use super::*;
     use utils::StringWriter;
 
@@ -319,17 +313,16 @@ mod tests {
 
     #[test]
     fn fwd_declare() {
-        let out = test_tu(|f| {
+        compile_test("fwd_declare", |f| {
             let i = f.i32();
             let _p = f.ptr_to(i);
             let v = f.void();
             let _p = f.ptr_to(v);
 
-            f.fwd_declare_struct(Symbol::test("my_struct"))?;
-            f.fwd_declare_union(Symbol::test("my_union"))?;
+            f.fwd_declare_struct(Name::test("my_struct"))?;
+            f.fwd_declare_union(Name::test("my_union"))?;
             Ok(())
         });
-        assert_snapshot_matches!("fwd_declare", out);
     }
 
     #[test]
@@ -337,11 +330,11 @@ mod tests {
     fn redefinition() {
         // A test that's supposed to fail has to panic inside the closure, or
         // else `test` will compile the output.
-        test_tu(|f| {
+        compile_test("redefinition", |f| {
             let bool = f.bool();
-            f.define_struct(Symbol::test("my_struct"), vec![("field1", bool)])?;
+            f.define_struct(Name::test("my_struct"), vec![("field1", bool)])?;
             let msg = f
-                .define_struct(Symbol::test("my_struct"), vec![("field2", bool)])
+                .define_struct(Name::test("my_struct"), vec![("field2", bool)])
                 .unwrap_err()
                 .to_string();
             panic!("{}", msg);
@@ -350,18 +343,18 @@ mod tests {
 
     #[test]
     fn define_struct() {
-        let out = test_tu(|f| {
+        compile_test("define_struct", |f| {
             let i = f.i32();
             let pi = f.ptr_to(i);
             let v = f.void();
             let pv = f.ptr_to(v);
             let b = f.bool();
 
-            f.fwd_declare_struct(Symbol::test("my_struct"))?;
-            f.fwd_declare_union(Symbol::test("my_union"))?;
+            f.fwd_declare_struct(Name::test("my_struct"))?;
+            f.fwd_declare_union(Name::test("my_union"))?;
 
             f.define_struct(
-                Symbol::test("my_struct"),
+                Name::test("my_struct"),
                 vec![
                     ("intfield", i),
                     ("intptr", pi),
@@ -371,13 +364,12 @@ mod tests {
             )?;
             Ok(())
         });
-        assert_snapshot_matches!("define_struct", out);
     }
 
     /// Defines a struct containing function pointer fields.
     #[test]
     fn define_struct_fn_ptr() {
-        let out = test_tu(|f| {
+        compile_test("define_struct_fn_ptr", |f| {
             let i = f.i32();
             let pi = f.ptr_to(i);
             let v = f.void();
@@ -391,33 +383,31 @@ mod tests {
             let fn_ptr3 = f.fn_ptr(fn_sig);
 
             f.define_struct(
-                Symbol::test("my_struct"),
+                Name::test("my_struct"),
                 vec![("f1", fn_ptr), ("f2", fn_ptr2), ("f3", fn_ptr3)],
             )?;
             Ok(())
         });
-        assert_snapshot_matches!("define_struct_fn_ptr", out);
     }
 
     #[test]
     fn fwd_declare_fn() {
-        let out = test_tu(|f| {
+        compile_test("fwd_declare_fn", |f| {
             let i = f.i32();
             let pi = f.ptr_to(i);
             let b = f.bool();
 
             let sig = f.fn_sig(Some(pi), &[i, i, b]);
-            f.fwd_declare_function(Symbol::test("myfn"), sig)?;
+            f.fwd_declare_function(Name::test("myfn"), sig)?;
             let sig = f.fn_sig(None, &[]);
-            f.fwd_declare_function(Symbol::test("empty"), sig)?;
+            f.fwd_declare_function(Name::test("empty"), sig)?;
             Ok(())
         });
-        assert_snapshot_matches!("fwd_declare_fn", out);
     }
 
     #[test]
     fn def_fn() {
-        let out = test_tu(|f| {
+        compile_test("def_fn", |f| {
             let i = f.i32();
             let pi = f.ptr_to(i);
             let b = f.bool();
@@ -425,10 +415,9 @@ mod tests {
             // TODO: Test more way to declare fns (returning fn ptr, nothing, taking no args, ...)
             let sig = f.fn_sig(Some(pi), &[i, i, b]);
             let arena = Arena::new();
-            let b = f.define_function(&arena, Symbol::test("myfn"), sig)?;
+            let b = f.define_function(&arena, Name::test("myfn"), sig)?;
             b.finish()?;
             Ok(())
         });
-        assert_snapshot_matches!("def_fn", out);
     }
 }
