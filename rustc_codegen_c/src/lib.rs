@@ -21,6 +21,8 @@ extern crate syntax;
 extern crate serialize;
 extern crate syntax_pos;
 
+extern crate git_version;
+extern crate once_cell;
 #[macro_use]
 extern crate log;
 extern crate ar;
@@ -36,6 +38,7 @@ extern crate bitflags;
 
 mod builder;
 mod codegen;
+mod ice;
 mod metadata;
 mod providers;
 mod utils;
@@ -86,8 +89,8 @@ impl CCodegenBackend {
 
 impl CodegenBackend for CCodegenBackend {
     fn init(&self, sess: &Session) {
-        // TODO (rustc): Try using `panic::set_hook` for ICE reporting so we can change it in here
-        //panic::take_hook();
+        info!("r2c2 C codegen backend initializing!");
+        ice::register_hook();
     }
 
     fn print(&self, req: PrintRequest, sess: &Session) {
